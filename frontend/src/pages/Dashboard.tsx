@@ -169,11 +169,6 @@ export const Dashboard: React.FC = () => {
                       />
                     ))}
                   </div>
-
-                  {activeDataset.insights && (
-                    <Aisummary insights={activeDataset.insights} />
-                  )}
-
                   {activeDataset.charts && activeDataset.charts.length > 0 && (
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                       {activeDataset.charts.map((chartDef, idx) => {
@@ -192,6 +187,11 @@ export const Dashboard: React.FC = () => {
                       })}
                     </div>
                   )}
+
+                  {activeDataset.insights && (
+                    <Aisummary insights={activeDataset.insights} />
+                  )}
+
                 </>
               )}
             </div>

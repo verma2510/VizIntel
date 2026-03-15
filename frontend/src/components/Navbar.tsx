@@ -15,7 +15,7 @@ export const Navbar: React.FC = () => {
               <ActivitySquare className="text-white relative z-10" />
             </div>
             <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-200 to-indigo-200">
-              InsightFlow Dashboard
+              VizIntel Dashboard
             </span>
           </div>
 

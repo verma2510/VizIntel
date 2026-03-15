@@ -55,7 +55,7 @@ export const Login: React.FC = () => {
             Welcome Back
           </h2>
           <p className="text-slate-400 mt-2 text-center text-sm">
-            Sign in to continue to InsightFlow Dashboard
+            Sign in to continue to VizIntel Dashboard
           </p>
         </div>
 
