@@ -1,6 +1,7 @@
 import React from "react";
 import { Sparkles, Activity } from "lucide-react";
 import { Card } from "./Card";
+import ReactMarkdown from "react-markdown";
 
 interface AisummaryProps {
   insights: string;
@@ -20,13 +21,23 @@ export const Aisummary: React.FC<AisummaryProps> = ({ insights }) => {
           <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 mb-2">
             AI-Powered Insights
           </h2>
-          <div className="prose prose-invert prose-p:leading-relaxed text-slate-300">
-            {insights.split('\n').map((paragraph, index) => (
-              <p key={index} className="mb-2 last:mb-0 flex gap-2">
-                {paragraph.trim() && <Activity size={16} className="mt-1 flex-shrink-0 text-indigo-500/50" />}
-                <span>{paragraph}</span>
-              </p>
-            ))}
+          <div className="prose prose-invert prose-p:leading-relaxed text-slate-300 w-full max-w-full">
+            <ReactMarkdown
+              components={{
+                p: ({ node, ...props }) => (
+                  <p className="mb-4 last:mb-0 flex gap-2 items-start" {...props}>
+                    <Activity size={16} className="mt-1 flex-shrink-0 text-indigo-500/50" />
+                    <span>{props.children}</span>
+                  </p>
+                ),
+                strong: ({ node, ...props }) => <strong className="font-bold text-indigo-300" {...props} />,
+                ul: ({ node, ...props }) => <ul className="list-disc list-outside ml-6 mb-4 space-y-1" {...props} />,
+                ol: ({ node, ...props }) => <ol className="list-decimal list-outside ml-6 mb-4 space-y-1" {...props} />,
+                li: ({ node, ...props }) => <li className="text-slate-300" {...props} />
+              }}
+            >
+              {insights}
+            </ReactMarkdown>
           </div>
         </div>
       </div>
