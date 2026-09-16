@@ -1,18 +1,31 @@
 const Dataset = require("../models/Dataset");
-const { analyzeData } = require("../utils/dataAnalyzer");
+const { analyzeData, buildKpisAndCharts } = require("../utils/dataAnalyzer");
+const { classifyColumns } = require("../utils/columnClassifier");
 const { generateInsights } = require("../utils/aiInsights");
 
 exports.uploadDataset = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ msg: "No file uploaded" });
 
-    // 1. Analyze the uploaded Excel/CSV file for data, KPIs, Charts
-    const { data, columns, kpis, charts } = analyzeData(req.file.buffer);
+    // 1. Parse the uploaded Excel/CSV file and detect structural column types (numeric/date/categorical)
+    const { data, columns: structuralColumns } = analyzeData(req.file.buffer);
 
-    // 2. Generate AI Insights based on extracted KPIs
+    // 2. Use the LLM to determine each column's real business meaning (currency, quantity,
+    //    percentage, date, identifier, category, text) instead of generic numeric/categorical
+    const semanticInfo = await classifyColumns(structuralColumns, data);
+    const columns = structuralColumns.map((col, idx) => ({
+      ...col,
+      semanticType: semanticInfo[idx].semanticType,
+      label: semanticInfo[idx].label,
+    }));
+
+    // 3. Build KPIs and charts using the semantic types (e.g. skips identifier columns for grouping)
+    const { kpis, charts } = buildKpisAndCharts(data, columns);
+
+    // 4. Generate AI Insights based on extracted KPIs and enriched column info
     const insights = await generateInsights(kpis, columns);
 
-    // 3. Save to database for the authenticated user
+    // 5. Save to database for the authenticated user
     const newDataset = new Dataset({
       user: req.user.id,
       name: req.file.originalname,
