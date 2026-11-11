@@ -1,29 +1,48 @@
-require("dotenv").config();
-const express = require("express");
-const cors = require("cors");
+const { config, assertConfig } = require("./config/env");
+const mongoose = require("mongoose");
 const connectDB = require("./config/db");
-const authRoutes = require("./routes/authRoutes");
-const datasetRoutes = require("./routes/datasetRoutes");
-const analyticsRoutes = require("./routes/analyticsRoutes");
+const { createApp } = require("./app");
+const eventBus = require("./lib/eventBus");
+const { getRedis, closeRedis } = require("./lib/redis");
+const { SUBSCRIPTIONS } = require("./events/registry");
+const logger = require("./lib/logger");
 
-const app = express();
+assertConfig(["mongo.uri", "jwtSecret"]);
 
-// Connect to DB
+// Connect to DB (and Redis, which is optional and connects in the background)
 connectDB();
+getRedis();
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// In-process handlers: the primary processors in inline mode, the fallback for critical events in Kafka mode.
+eventBus.registerSubscriptions(SUBSCRIPTIONS);
+eventBus.start();
 
-// Routes
-app.use("/api/auth", authRoutes);
-app.use("/api/datasets", datasetRoutes);
-app.use("/api/analytics", analyticsRoutes);
+const app = createApp();
+const PORT = config.port;
+const server = app.listen(PORT, () =>
+  logger.info(
+    { port: PORT, eventTransport: config.kafka.enabled ? "kafka" : "inline", redis: config.redis.enabled, insightsMode: config.insights.mode },
+    `Server running on port ${PORT}`
+  )
+);
 
-app.get("/health", (req, res) => {
-    res.status(200).send("Server is awake and running");
-})
-
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// Graceful shutdown: stop accepting connections, drain the event outbox, then close connections.
+let shuttingDown = false;
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  logger.info({ signal }, "Shutting down API");
+  const forceExit = setTimeout(() => process.exit(1), 15000);
+  forceExit.unref();
+  server.close();
+  try {
+    await eventBus.shutdown();
+    await mongoose.disconnect();
+    await closeRedis();
+  } finally {
+    process.exit(0);
+  }
+}
+process.once("SIGINT", () => shutdown("SIGINT"));
+process.once("SIGTERM", () => shutdown("SIGTERM"));
+process.on("unhandledRejection", (reason) => logger.error({ err: reason?.message || reason }, "Unhandled rejection"));

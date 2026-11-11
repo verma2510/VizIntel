@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { flush as flushTracker } from "../lib/tracker";
 
 export interface User {
   id: string;
@@ -44,6 +45,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    // Ship queued interaction events while the token is still available, so they stay attributed.
+    void flushTracker({ keepalive: true });
     setToken(null);
     setUser(null);
     localStorage.removeItem("token");

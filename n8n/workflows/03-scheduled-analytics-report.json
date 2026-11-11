@@ -1,0 +1,269 @@
+{
+  "id": "vzWeeklyReport01",
+  "name": "VizIntel - Weekly Analytics Report",
+  "versionId": "4cfdd79a-1015-4a2d-a496-6d972363c295",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "e8ea547b-f574-4007-a2df-f9f4133a0c23",
+      "name": "Every Monday 08:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "8cc78e45-8812-4234-a64d-cde6b8f97cfb",
+      "name": "Send Report Now",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.VIZINTEL_API_URL }}/api/internal/reports/activity?days=7",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Internal-Api-Key",
+              "value": "={{ $env.VIZINTEL_INTERNAL_API_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "3ceb0f31-1145-4a90-a9e9-3cd3b9efb487",
+      "name": "Fetch Activity Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "const esc = (s) => String(s ?? '').replace(/[&<>\"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[c]));\nconst fmt = (n) => (typeof n === 'number' && Number.isFinite(n)) ? n.toLocaleString('en-US', { maximumFractionDigits: 2 }) : esc(n);\nconst layout = (title, body) => `<div style=\"font-family:Segoe UI,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;color:#0f172a\">\n  <div style=\"background:#4f46e5;color:#fff;padding:20px 24px;border-radius:12px 12px 0 0\"><b style=\"font-size:18px\">VizIntel Dashboard</b></div>\n  <div style=\"border:1px solid #e2e8f0;border-top:0;padding:24px;border-radius:0 0 12px 12px\">\n    <h2 style=\"margin:0 0 12px;font-size:20px\">${title}</h2>${body}\n  </div>\n  <p style=\"color:#94a3b8;font-size:12px;text-align:center;margin-top:12px\">Automated message from the VizIntel n8n workflows.</p>\n</div>`;\nconst button = (href, label) => `<p style=\"margin:20px 0 0\"><a href=\"${esc(href)}\" style=\"background:#4f46e5;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none\">${esc(label)}</a></p>`;\n\nconst data = $input.first().json;\nconst period = new Date(data.period.from).toDateString() + ' - ' + new Date(data.period.to).toDateString();\nconst stat = (label, value) => `<td style=\"padding:12px;background:#f8fafc;border-radius:8px;text-align:center\">\n  <div style=\"font-size:22px;font-weight:700\">${fmt(value)}</div><div style=\"color:#64748b;font-size:12px\">${label}</div></td>`;\n\nreturn (data.reports || []).map((r) => {\n  const recent = (r.recentDatasets || []).map((d) => `<li>${esc(d.name)} <span style=\"color:#64748b\">(${fmt(d.rows)} rows)</span></li>`).join('');\n  const searches = (r.topSearches || []).map((s) => `<code style=\"background:#eef2ff;padding:2px 6px;border-radius:4px\">${esc(s.term)}</code>`).join(' ');\n  const body = `<p>Hi ${esc(r.user.name)}, here is your activity for <b>${esc(period)}</b>.</p>\n    <table style=\"width:100%;border-spacing:8px\"><tr>\n      ${stat('Datasets uploaded', r.datasetsUploaded)}${stat('Rows processed', r.rowsProcessed)}${stat('Page views', r.activity.pageViews)}${stat('Searches', r.activity.searches)}\n    </tr></table>\n    ${recent ? '<p style=\"margin-bottom:4px\"><b>Recent uploads</b></p><ul style=\"margin-top:4px\">' + recent + '</ul>' : ''}\n    ${searches ? '<p><b>Top searches:</b> ' + searches + '</p>' : ''}\n    ${button(r.dashboardUrl, 'Open your dashboard')}`;\n  return { json: { to: r.user.email, subject: 'Your VizIntel weekly report (' + period + ')', html: layout('Weekly analytics report', body) } };\n});"
+      },
+      "id": "d3fece53-3286-4d9c-a347-b786ad2a8b74",
+      "name": "Build User Reports",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.VIZINTEL_MAIL_FROM }}",
+        "toEmail": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "html",
+        "html": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "4800b0a7-3a2e-4bf3-a0f0-51d7a1b41572",
+      "name": "Email: User Report",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        660,
+        200
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "vizintelSmtp",
+          "name": "VizIntel SMTP"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "const esc = (s) => String(s ?? '').replace(/[&<>\"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[c]));\nconst fmt = (n) => (typeof n === 'number' && Number.isFinite(n)) ? n.toLocaleString('en-US', { maximumFractionDigits: 2 }) : esc(n);\nconst layout = (title, body) => `<div style=\"font-family:Segoe UI,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;color:#0f172a\">\n  <div style=\"background:#4f46e5;color:#fff;padding:20px 24px;border-radius:12px 12px 0 0\"><b style=\"font-size:18px\">VizIntel Dashboard</b></div>\n  <div style=\"border:1px solid #e2e8f0;border-top:0;padding:24px;border-radius:0 0 12px 12px\">\n    <h2 style=\"margin:0 0 12px;font-size:20px\">${title}</h2>${body}\n  </div>\n  <p style=\"color:#94a3b8;font-size:12px;text-align:center;margin-top:12px\">Automated message from the VizIntel n8n workflows.</p>\n</div>`;\nconst button = (href, label) => `<p style=\"margin:20px 0 0\"><a href=\"${esc(href)}\" style=\"background:#4f46e5;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none\">${esc(label)}</a></p>`;\n\nconst data = $input.first().json;\nconst t = data.totals;\nconst top = (data.reports || []).slice(0, 10).map((r) => `<tr><td style=\"padding:4px 8px\">${esc(r.user.name)}</td>\n  <td style=\"padding:4px 8px;text-align:right\">${fmt(r.datasetsUploaded)}</td><td style=\"padding:4px 8px;text-align:right\">${fmt(r.activity.pageViews)}</td></tr>`).join('');\nconst body = `<p>Platform totals for the last ${data.period.days} days:</p>\n  <ul><li><b>${fmt(t.users)}</b> active users</li><li><b>${fmt(t.datasetsUploaded)}</b> datasets / <b>${fmt(t.rowsProcessed)}</b> rows</li>\n  <li><b>${fmt(t.pageViews)}</b> page views, <b>${fmt(t.clicks)}</b> clicks, <b>${fmt(t.searches)}</b> searches</li></ul>\n  ${top ? '<table style=\"font-size:14px\"><tr><th style=\"text-align:left;padding:4px 8px\">User</th><th style=\"padding:4px 8px\">Uploads</th><th style=\"padding:4px 8px\">Page views</th></tr>' + top + '</table>' : ''}`;\nreturn [{ json: { to: $env.VIZINTEL_ADMIN_EMAIL || '', subject: 'VizIntel platform digest', html: layout('Weekly platform digest', body) } }];"
+      },
+      "id": "87d7bb42-dafe-4956-a325-d09b68cf3e0e",
+      "name": "Build Admin Digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "d7f74de4-e16a-46e9-a9b3-35bc19015895",
+              "leftValue": "={{ $json.to }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2e37c45e-842b-4df7-a94a-9d41d61c8d70",
+      "name": "Admin Email Set?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.VIZINTEL_MAIL_FROM }}",
+        "toEmail": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "html",
+        "html": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "27b6f8f2-8ec3-48e5-a54e-0a38250ae385",
+      "name": "Email: Admin Digest",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        880,
+        400
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "vizintelSmtp",
+          "name": "VizIntel SMTP"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    }
+  ],
+  "connections": {
+    "Every Monday 08:00": {
+      "main": [
+        [
+          {
+            "node": "Fetch Activity Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Report Now": {
+      "main": [
+        [
+          {
+            "node": "Fetch Activity Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Activity Report": {
+      "main": [
+        [
+          {
+            "node": "Build User Reports",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Admin Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build User Reports": {
+      "main": [
+        [
+          {
+            "node": "Email: User Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Admin Digest": {
+      "main": [
+        [
+          {
+            "node": "Admin Email Set?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Admin Email Set?": {
+      "main": [
+        [
+          {
+            "node": "Email: Admin Digest",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "timezone": "UTC"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

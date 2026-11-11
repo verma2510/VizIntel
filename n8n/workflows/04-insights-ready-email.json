@@ -1,0 +1,265 @@
+{
+  "id": "vzInsightsReady1",
+  "name": "VizIntel - Insights Ready Email",
+  "versionId": "b33d9049-f556-4ba6-a9c7-119f899177a8",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "vizintel/insights-generated",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a8550ecd-9adb-4071-a038-4db9513c32a8",
+      "name": "Insights Generated",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "f7e693a8-cb51-41be-a73d-20bd97a672c8"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Verifies the HMAC the VizIntel notifier puts on every webhook:\n//   X-VizIntel-Signature = \"sha256=\" + HMAC_SHA256(secret, timestamp + \".\" + body)\n// and rejects timestamps older than 5 minutes (replay protection).\nconst crypto = require('crypto');\nconst secret = $env.VIZINTEL_WEBHOOK_SECRET || '';\n\nreturn $input.all().map((item) => {\n  const headers = item.json.headers || {};\n  const body = item.json.body || {};\n  const signature = String(headers['x-vizintel-signature'] || '');\n  const timestamp = String(headers['x-vizintel-timestamp'] || '');\n  const fresh = Math.abs(Date.now() - Number(timestamp)) < 5 * 60 * 1000;\n  const expected = 'sha256=' + crypto.createHmac('sha256', secret)\n    .update(timestamp + '.' + JSON.stringify(body))\n    .digest('hex');\n  const valid = Boolean(secret) && fresh && signature.length === expected.length &&\n    crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));\n  const reason = valid ? null : !secret ? 'VIZINTEL_WEBHOOK_SECRET not configured' : !fresh ? 'stale or missing timestamp' : 'invalid signature';\n  return { json: { valid, reason, event: body } };\n});"
+      },
+      "id": "644cae5b-c723-4984-ad97-7218406e277e",
+      "name": "Verify Signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "70e43579-a755-42ed-a364-28eb0e632358",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b7cfc566-b215-43b5-ac04-9a4920888502",
+      "name": "Signature Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ accepted: true, eventId: $json.event.eventId }) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "dc9cb45f-e618-48c7-a46c-4cd4a5d06db1",
+      "name": "Accept",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ accepted: false, reason: $json.reason }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "42d44b28-4cb4-40ca-a27c-c28a3574ecc8",
+      "name": "Reject",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "96db58e6-c81d-4fee-a68a-21b4a9d5578a",
+              "leftValue": "={{ $json.event.insights.status }}",
+              "rightValue": "ready",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "659fb551-919f-4c82-ae36-ba285df40f53",
+      "name": "Insights Ready?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        880,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const esc = (s) => String(s ?? '').replace(/[&<>\"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[c]));\nconst fmt = (n) => (typeof n === 'number' && Number.isFinite(n)) ? n.toLocaleString('en-US', { maximumFractionDigits: 2 }) : esc(n);\nconst layout = (title, body) => `<div style=\"font-family:Segoe UI,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;color:#0f172a\">\n  <div style=\"background:#4f46e5;color:#fff;padding:20px 24px;border-radius:12px 12px 0 0\"><b style=\"font-size:18px\">VizIntel Dashboard</b></div>\n  <div style=\"border:1px solid #e2e8f0;border-top:0;padding:24px;border-radius:0 0 12px 12px\">\n    <h2 style=\"margin:0 0 12px;font-size:20px\">${title}</h2>${body}\n  </div>\n  <p style=\"color:#94a3b8;font-size:12px;text-align:center;margin-top:12px\">Automated message from the VizIntel n8n workflows.</p>\n</div>`;\nconst button = (href, label) => `<p style=\"margin:20px 0 0\"><a href=\"${esc(href)}\" style=\"background:#4f46e5;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none\">${esc(label)}</a></p>`;\n\nreturn $input.all().map((item) => {\n  const e = item.json.event;\n  const bullets = (e.insights.bullets || []).map((b) => `<li style=\"margin-bottom:6px\">${esc(b)}</li>`).join('');\n  const body = `<p>Hi ${esc(e.user.name)}, the AI analysis for <b>${esc(e.dataset.name)}</b> is ready:</p>\n    <ul style=\"padding-left:20px\">${bullets}</ul>${button(e.dataset.url, 'View insights')}`;\n  return { json: { to: e.user.email, subject: `AI insights ready: ${e.dataset.name}`, html: layout('Your AI insights are ready', body) } };\n});"
+      },
+      "id": "93bb2e9c-1728-4c75-a4af-610d5dd449a1",
+      "name": "Build Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.VIZINTEL_MAIL_FROM }}",
+        "toEmail": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "html",
+        "html": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "58646175-b3e4-438b-a5e9-4fa75be57709",
+      "name": "Email: Insights Ready",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1320,
+        100
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "vizintelSmtp",
+          "name": "VizIntel SMTP"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    }
+  ],
+  "connections": {
+    "Insights Generated": {
+      "main": [
+        [
+          {
+            "node": "Verify Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Signature": {
+      "main": [
+        [
+          {
+            "node": "Signature Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Signature Valid?": {
+      "main": [
+        [
+          {
+            "node": "Accept",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Accept": {
+      "main": [
+        [
+          {
+            "node": "Insights Ready?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insights Ready?": {
+      "main": [
+        [
+          {
+            "node": "Build Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Build Email": {
+      "main": [
+        [
+          {
+            "node": "Email: Insights Ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "timezone": "UTC"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

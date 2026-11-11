@@ -1,0 +1,303 @@
+{
+  "id": "vzDatasetUpload1",
+  "name": "VizIntel - Dataset Upload Notification",
+  "versionId": "da4c152c-8b77-4edf-ae78-3f591acba9d9",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "vizintel/dataset-uploaded",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "dc500d7b-0cfe-41db-a39c-ba06c9a6eae9",
+      "name": "Dataset Uploaded",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "93cc2683-f008-441e-ab24-0db4c1f7fbf5"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Verifies the HMAC the VizIntel notifier puts on every webhook:\n//   X-VizIntel-Signature = \"sha256=\" + HMAC_SHA256(secret, timestamp + \".\" + body)\n// and rejects timestamps older than 5 minutes (replay protection).\nconst crypto = require('crypto');\nconst secret = $env.VIZINTEL_WEBHOOK_SECRET || '';\n\nreturn $input.all().map((item) => {\n  const headers = item.json.headers || {};\n  const body = item.json.body || {};\n  const signature = String(headers['x-vizintel-signature'] || '');\n  const timestamp = String(headers['x-vizintel-timestamp'] || '');\n  const fresh = Math.abs(Date.now() - Number(timestamp)) < 5 * 60 * 1000;\n  const expected = 'sha256=' + crypto.createHmac('sha256', secret)\n    .update(timestamp + '.' + JSON.stringify(body))\n    .digest('hex');\n  const valid = Boolean(secret) && fresh && signature.length === expected.length &&\n    crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));\n  const reason = valid ? null : !secret ? 'VIZINTEL_WEBHOOK_SECRET not configured' : !fresh ? 'stale or missing timestamp' : 'invalid signature';\n  return { json: { valid, reason, event: body } };\n});"
+      },
+      "id": "ca7da1cf-02bf-4e0e-a465-397b8a0933ae",
+      "name": "Verify Signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "40a6b9d1-43bd-4feb-a096-e7f4f84f645b",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c30bf0a0-5e5e-4842-a598-0c3bab91c5bb",
+      "name": "Signature Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ accepted: false, reason: $json.reason }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "0b622a1a-0d91-4915-a8bd-b0cd49cd85f9",
+      "name": "Reject",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ accepted: true, eventId: $json.event.eventId }) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "76ac1b7d-0310-4d8d-af50-d37cb8759a94",
+      "name": "Accept",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const esc = (s) => String(s ?? '').replace(/[&<>\"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[c]));\nconst fmt = (n) => (typeof n === 'number' && Number.isFinite(n)) ? n.toLocaleString('en-US', { maximumFractionDigits: 2 }) : esc(n);\nconst layout = (title, body) => `<div style=\"font-family:Segoe UI,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;color:#0f172a\">\n  <div style=\"background:#4f46e5;color:#fff;padding:20px 24px;border-radius:12px 12px 0 0\"><b style=\"font-size:18px\">VizIntel Dashboard</b></div>\n  <div style=\"border:1px solid #e2e8f0;border-top:0;padding:24px;border-radius:0 0 12px 12px\">\n    <h2 style=\"margin:0 0 12px;font-size:20px\">${title}</h2>${body}\n  </div>\n  <p style=\"color:#94a3b8;font-size:12px;text-align:center;margin-top:12px\">Automated message from the VizIntel n8n workflows.</p>\n</div>`;\nconst button = (href, label) => `<p style=\"margin:20px 0 0\"><a href=\"${esc(href)}\" style=\"background:#4f46e5;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none\">${esc(label)}</a></p>`;\n\nreturn $input.all().map((item) => {\n  const e = item.json.event;\n  const d = e.dataset;\n  const status = {\n    ready: 'AI insights are ready on your dashboard.',\n    pending: 'AI insights are being generated in the background — you will get another email when they are ready.',\n    failed: 'AI insights could not be generated yet. We are retrying automatically.',\n  }[d.insightsStatus] || '';\n  const rows = (d.topKpis || []).map((k) => `<tr>\n      <td style=\"padding:6px 10px;border-bottom:1px solid #e2e8f0\">${esc(k.name)}</td>\n      <td style=\"padding:6px 10px;border-bottom:1px solid #e2e8f0;text-align:right\"><b>${fmt(k.sum)}</b></td>\n      <td style=\"padding:6px 10px;border-bottom:1px solid #e2e8f0;text-align:right\">${fmt(Number(k.avg))}</td></tr>`).join('');\n  const kpiTable = rows ? `<table style=\"border-collapse:collapse;width:100%;font-size:14px;margin:12px 0\">\n      <tr style=\"background:#f1f5f9\"><th style=\"text-align:left;padding:6px 10px\">KPI</th><th style=\"text-align:right;padding:6px 10px\">Total</th><th style=\"text-align:right;padding:6px 10px\">Avg / row</th></tr>${rows}</table>` : '';\n  const body = `<p>Hi ${esc(e.user.name)},</p>\n    <p><b>${esc(d.name)}</b> has been analysed: <b>${fmt(d.rowCount)}</b> rows, <b>${fmt(d.columnCount)}</b> columns,\n    ${fmt(d.kpiCount)} KPIs and ${fmt(d.chartCount)} charts generated in ${fmt(d.processingMs)} ms.</p>\n    ${kpiTable}<p>${esc(status)}</p>${button(d.url, 'Open dashboard')}`;\n  return { json: { to: e.user.email, subject: `Your dataset \"${d.name}\" has been processed`, html: layout('Dataset processed', body), event: e } };\n});"
+      },
+      "id": "c1778034-e257-400a-a568-a02ea9f9bb34",
+      "name": "Build Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.VIZINTEL_MAIL_FROM }}",
+        "toEmail": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "html",
+        "html": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "b88f4821-a369-4722-aa53-dc5b6e2a94d8",
+      "name": "Email: Dataset Processed",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1100,
+        100
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "vizintelSmtp",
+          "name": "VizIntel SMTP"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "ac46cc4a-64e7-4241-a083-915538684a97",
+              "leftValue": "={{ Boolean($json.event.actions && $json.event.actions.regenerateInsights) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1b3ca19e-c2b5-4a0b-a85c-b3ba08540e91",
+      "name": "Insights Failed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        880,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.VIZINTEL_API_URL }}/api/internal/datasets/{{ $json.event.dataset.id }}/insights",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Internal-Api-Key",
+              "value": "={{ $env.VIZINTEL_INTERNAL_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ reason: \"n8n:upload-failed\" }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "95e8e7f3-f300-4fbd-a7f8-70075ca2612f",
+      "name": "Trigger Insight Regeneration",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    }
+  ],
+  "connections": {
+    "Dataset Uploaded": {
+      "main": [
+        [
+          {
+            "node": "Verify Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Signature": {
+      "main": [
+        [
+          {
+            "node": "Signature Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Signature Valid?": {
+      "main": [
+        [
+          {
+            "node": "Accept",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Accept": {
+      "main": [
+        [
+          {
+            "node": "Build Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Insights Failed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Email": {
+      "main": [
+        [
+          {
+            "node": "Email: Dataset Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insights Failed?": {
+      "main": [
+        [
+          {
+            "node": "Trigger Insight Regeneration",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "timezone": "UTC"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

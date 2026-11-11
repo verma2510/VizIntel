@@ -1,4 +1,6 @@
 const axios = require("axios");
+const { config } = require("../config/env");
+const logger = require("../lib/logger").child({ component: "columnClassifier" });
 
 // How many sample values per column to show the LLM (enough to infer meaning, small enough to keep the prompt cheap).
 const SAMPLES_PER_COLUMN = 5;
@@ -48,8 +50,11 @@ const heuristicClassify = (column) => {
  * Uses the LLM to determine the real-world business meaning of each column
  * (currency vs quantity vs date vs identifier, etc.) instead of relying only
  * on generic numeric/categorical typing.
+ *
+ * Returns { columns, source } where source is "llm" or "heuristic" — callers use it to decide whether
+ * the result is worth caching (only genuine LLM classifications are cached).
  */
-const classifyColumns = async (columns, data) => {
+const classifyColumnsDetailed = async (columns, data) => {
   const fallback = columns.map(heuristicClassify);
 
   try {
@@ -79,16 +84,16 @@ const classifyColumns = async (columns, data) => {
     `;
 
     const response = await axios.post(
-      "https://api.groq.com/openai/v1/chat/completions",
+      config.ai.url,
       {
-        model: "openai/gpt-oss-20b",
+        model: config.ai.model,
         messages: [{ role: "user", content: prompt }],
         temperature: 0,
         response_format: { type: "json_object" },
       },
       {
         headers: {
-          Authorization: `Bearer ${process.env.AI_API_KEY}`,
+          Authorization: `Bearer ${config.ai.apiKey}`,
           "Content-Type": "application/json",
         },
         timeout: 15000,
@@ -98,17 +103,21 @@ const classifyColumns = async (columns, data) => {
     const parsed = JSON.parse(response.data.choices[0].message.content);
     const byName = new Map(parsed.columns.map(c => [c.name, c]));
 
-    return columns.map((col, idx) => {
+    const classified = columns.map((col, idx) => {
       const match = byName.get(col.name);
       if (match && VALID_SEMANTIC_TYPES.includes(match.semanticType)) {
         return { semanticType: match.semanticType, label: match.label || col.name };
       }
       return fallback[idx];
     });
+    return { columns: classified, source: "llm" };
   } catch (error) {
-    console.error("Column Classification Error:", error.response?.data || error.message);
-    return fallback;
+    logger.error({ err: error.response?.data || error.message }, "Column Classification Error");
+    return { columns: fallback, source: "heuristic" };
   }
 };
 
-module.exports = { classifyColumns, VALID_SEMANTIC_TYPES };
+/** Original API (array of { semanticType, label }), kept for backwards compatibility. */
+const classifyColumns = async (columns, data) => (await classifyColumnsDetailed(columns, data)).columns;
+
+module.exports = { classifyColumns, classifyColumnsDetailed, VALID_SEMANTIC_TYPES };

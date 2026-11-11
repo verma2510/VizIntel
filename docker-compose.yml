@@ -1,0 +1,228 @@
+# VizIntel local development stack.
+#
+#   cp .env.example .env            # optional: set AI_API_KEY and secrets
+#   docker compose up -d --build    # MongoDB, Redis, Kafka, n8n, Mailpit, API + 3 workers
+#   cd frontend && npm run dev      # React app on http://localhost:5173
+#
+#   docker compose --profile tools up -d kafka-ui          # Kafka UI on http://localhost:8080
+#   docker compose up -d --scale activity-worker=3         # scale a consumer group horizontally
+#
+# Infra only (run the API/workers on the host with `npm run dev` / `npm run workers`):
+#   docker compose up -d mongo redis kafka kafka-setup n8n mailpit
+#   -> backend/.env: MONGO_URI=mongodb://localhost:27018/vizintel, REDIS_URL=redis://localhost:6379,
+#                    KAFKA_BROKERS=localhost:9092
+
+name: vizintel
+
+x-backend-env: &backend-env
+  NODE_ENV: production
+  LOG_LEVEL: info
+  LOG_PRETTY: "false"
+  MONGO_URI: mongodb://mongo:27017/vizintel
+  JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-me}
+  AI_API_KEY: ${AI_API_KEY:-}
+  REDIS_URL: redis://redis:6379
+  KAFKA_BROKERS: kafka:19092
+  KAFKA_TOPIC_PREFIX: vizintel
+  INSIGHTS_MODE: async
+  APP_URL: http://localhost:5173
+  CORS_ORIGIN: http://localhost:5173,http://127.0.0.1:5173
+  INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-api-key-change-me}
+  N8N_WEBHOOK_SECRET: ${N8N_WEBHOOK_SECRET:-dev-webhook-secret-change-me}
+  N8N_WEBHOOK_DATASET_UPLOADED: http://n8n:5678/webhook/vizintel/dataset-uploaded
+  N8N_WEBHOOK_INSIGHTS_GENERATED: http://n8n:5678/webhook/vizintel/insights-generated
+
+x-worker: &worker
+  build: ./backend
+  restart: unless-stopped
+  init: true
+  environment:
+    <<: *backend-env
+    WORKER_HEALTH_PORT: "9100"
+    MONGO_MAX_POOL_SIZE: "10"
+  depends_on:
+    mongo:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    kafka-setup:
+      condition: service_completed_successfully
+  healthcheck:
+    test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9100/"]
+    interval: 15s
+    timeout: 5s
+    retries: 5
+    start_period: 40s
+
+services:
+  # ------------------------------------------------------------------ data stores
+  mongo:
+    image: mongo:7.0
+    restart: unless-stopped
+    ports:
+      - "${MONGO_PORT:-27018}:27017" # 27018 on the host so it doesn't clash with a local mongod
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    # Pure cache: bounded memory, LRU eviction, no persistence (everything is rebuildable from MongoDB).
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru", "--save", "", "--appendonly", "no"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  # ------------------------------------------------------------------ event streaming (KRaft, no ZooKeeper)
+  kafka:
+    image: apache/kafka:3.9.0
+    hostname: kafka
+    restart: unless-stopped
+    ports:
+      - "${KAFKA_PORT:-9092}:9092"
+    environment:
+      CLUSTER_ID: "4L6g3nShT-eMCtK--X86sw"
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: INTERNAL://:19092,EXTERNAL://:9092,CONTROLLER://:9093
+      # Containers reach the broker at kafka:19092, processes on the host at localhost:9092.
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:19092,EXTERNAL://localhost:${KAFKA_PORT:-9092}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # Topics are provisioned explicitly (partitions + retention) by kafka-setup; typos never auto-create.
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_NUM_PARTITIONS: 3
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 20s
+
+  kafka-setup:
+    build: ./backend
+    command: ["node", "scripts/kafkaSetup.js"]
+    restart: "no"
+    environment:
+      <<: *backend-env
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    profiles: ["tools"]
+    ports:
+      - "${KAFKA_UI_PORT:-8080}:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: vizintel-local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:19092
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  # ------------------------------------------------------------------ application
+  api:
+    build: ./backend
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${API_PORT:-5000}:5000"
+    environment:
+      <<: *backend-env
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka-setup:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5000/health/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  activity-worker:
+    <<: *worker
+    command: ["node", "workers/activityConsumer.js"]
+
+  notification-worker:
+    <<: *worker
+    command: ["node", "workers/notificationConsumer.js"]
+
+  insights-worker:
+    <<: *worker
+    command: ["node", "workers/insightsConsumer.js"]
+
+  # ------------------------------------------------------------------ automation
+  n8n:
+    image: n8nio/n8n:1.123.0
+    restart: unless-stopped
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    environment:
+      N8N_HOST: localhost
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      WEBHOOK_URL: http://localhost:${N8N_PORT:-5678}/
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-UTC}
+      TZ: ${GENERIC_TIMEZONE:-UTC}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-dev-n8n-encryption-key-change-me}
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      N8N_SECURE_COOKIE: "false" # plain-http localhost only
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+      # The workflows read these via $env and verify webhook HMACs with node:crypto in Code nodes.
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      NODE_FUNCTION_ALLOW_BUILTIN: crypto
+      N8N_RUNNERS_ENABLED: "false"
+      # Use http://host.docker.internal:5000 when the API runs on the host (infra-only mode).
+      VIZINTEL_API_URL: ${N8N_VIZINTEL_API_URL:-http://api:5000}
+      VIZINTEL_APP_URL: http://localhost:5173
+      VIZINTEL_INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-api-key-change-me}
+      VIZINTEL_WEBHOOK_SECRET: ${N8N_WEBHOOK_SECRET:-dev-webhook-secret-change-me}
+      VIZINTEL_MAIL_FROM: "VizIntel <no-reply@vizintel.local>"
+      VIZINTEL_ADMIN_EMAIL: admin@vizintel.local
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/workflows:ro
+      - ./n8n/credentials:/credentials:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5678/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  mailpit:
+    image: axllent/mailpit:v1.33.1
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_UI_PORT:-8025}:8025" # web inbox for every email n8n sends (SMTP on mailpit:1025)
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+
+volumes:
+  mongo_data:
+  n8n_data:

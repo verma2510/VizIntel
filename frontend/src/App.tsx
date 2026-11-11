@@ -4,6 +4,13 @@ import { AuthProvider, useAuth } from "./context/Auth";
 import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
 import { Dashboard } from "./pages/Dashboard";
+import { usePageTracking } from "./hooks/usePageTracking";
+
+// Emits a page_view event on every client-side route change.
+const RouteTracker = () => {
+  usePageTracking();
+  return null;
+};
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -20,6 +27,7 @@ const AuthRoute = ({ children }: { children: React.ReactNode }) => {
 function App() {
   return (
     <Router>
+      <RouteTracker />
       <AuthProvider>
         <Routes>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />

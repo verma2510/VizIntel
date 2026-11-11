@@ -94,7 +94,7 @@ export const Register: React.FC = () => {
             minLength={6}
           />
 
-          <Button type="submit" className="w-full mt-2 group" size="lg" isLoading={loading}>
+          <Button type="submit" className="w-full mt-2 group" size="lg" isLoading={loading} data-track="register_submit">
             Sign Up
             <CheckCircle2 className="ml-2 w-4 h-4" />
           </Button>
@@ -102,7 +102,7 @@ export const Register: React.FC = () => {
 
         <div className="mt-8 text-center text-sm text-slate-400">
           Already have an account?{" "}
-          <Link to="/login" className="text-indigo-400 hover:text-indigo-300 font-medium hover:underline transition-all">
+          <Link to="/login" data-track="nav_login" className="text-indigo-400 hover:text-indigo-300 font-medium hover:underline transition-all">
             Sign in
           </Link>
         </div>

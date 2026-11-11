@@ -27,9 +27,10 @@ export const Navbar: React.FC = () => {
                   <span className="text-xs text-slate-500">{user.email}</span>
                 </div>
                 <div className="h-8 w-px bg-slate-800" />
-                <Button 
-                  onClick={logout} 
-                  variant="ghost" 
+                <Button
+                  onClick={logout}
+                  data-track="logout"
+                  variant="ghost"
                   className="flex gap-2 items-center text-red-400 hover:text-red-300 hover:bg-red-950/30"
                 >
                   <LogOut size={16} />

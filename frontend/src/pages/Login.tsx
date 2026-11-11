@@ -84,7 +84,7 @@ export const Login: React.FC = () => {
             autoComplete="current-password"
           />
 
-          <Button type="submit" className="w-full mt-2 group" size="lg" isLoading={loading}>
+          <Button type="submit" className="w-full mt-2 group" size="lg" isLoading={loading} data-track="login_submit">
             Sign In
             <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </Button>
@@ -92,7 +92,7 @@ export const Login: React.FC = () => {
 
         <div className="mt-8 text-center text-sm text-slate-400">
           Don't have an account?{" "}
-          <Link to="/register" className="text-indigo-400 hover:text-indigo-300 font-medium hover:underline transition-all">
+          <Link to="/register" data-track="nav_register" className="text-indigo-400 hover:text-indigo-300 font-medium hover:underline transition-all">
             Create an account
           </Link>
         </div>

@@ -1,27 +1,23 @@
 const analyticsService = require("../services/analyticsService");
+const cache = require("../lib/cache");
+const { config } = require("../config/env");
+
+// Both endpoints are cache-aside (Redis). Keys live in the user's versioned namespace, so a new upload
+// or a finished insight generation invalidates them instantly. NotFoundError -> 404 via errorHandler.
 
 exports.getDatasetAnalytics = async (req, res) => {
-  try {
-    const { id } = req.params;
-    // Call the service for business logic
-    const analytics = await analyticsService.generateAdvancedAnalytics(id, req.user.id);
-    res.json(analytics);
-  } catch (error) {
-    if (error.message === "Dataset not found or unauthorized") {
-      return res.status(404).json({ msg: error.message });
-    }
-    console.error("Dataset Analytics Error:", error.message);
-    res.status(500).json({ msg: "Server Error generating analytics" });
-  }
+  const { id } = req.params;
+  const cacheKey = await cache.userKey(req.user.id, "analytics", id);
+  const result = await cache.remember(cacheKey, config.cache.ttl.analytics, () =>
+    analyticsService.generateAdvancedAnalytics(id, req.user.id)
+  );
+  cache.sendCached(res, result);
 };
 
 exports.getDashboardSummary = async (req, res) => {
-  try {
-    // Collect aggregated data across all datasets from the service
-    const summary = await analyticsService.getDashboardSummary(req.user.id);
-    res.json(summary);
-  } catch (error) {
-    console.error("Dashboard Summary Error:", error.message);
-    res.status(500).json({ msg: "Server Error fetching summary" });
-  }
+  const cacheKey = await cache.userKey(req.user.id, "summary");
+  const result = await cache.remember(cacheKey, config.cache.ttl.summary, () =>
+    analyticsService.getDashboardSummary(req.user.id)
+  );
+  cache.sendCached(res, result);
 };
