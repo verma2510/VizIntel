@@ -1,1 +1,207 @@
 @import "tailwindcss";
+
+/* Theme is resolved to data-theme="light" | "dark" on <html> (see index.html + context/Preferences). */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ------------------------------------------------------------------------------------------------
+ * VizIntel design tokens — "Signal"
+ *   Ink-and-paper neutrals, one ultramarine brand hue, and a volt (lime) accent reserved for AI.
+ *   Chart series colors live in src/lib/chart/theme.ts (validated for CVD separation in both modes).
+ * ---------------------------------------------------------------------------------------------- */
+:root {
+  color-scheme: light;
+  --vz-canvas: #f3f4f7;
+  --vz-surface: #ffffff;
+  --vz-surface-2: #f7f8fa;
+  --vz-surface-3: #eef0f4;
+  --vz-line: #e4e7ed;
+  --vz-line-strong: #cfd4dd;
+  --vz-ink: #0d1017;
+  --vz-ink-2: #4a5161;
+  --vz-ink-3: #7d8494;
+  --vz-brand: #3d5afe;
+  --vz-brand-strong: #2a44e0;
+  --vz-brand-soft: rgb(61 90 254 / 0.09);
+  --vz-brand-ink: #2a44e0;
+  --vz-volt: #c6f24e;
+  --vz-volt-ink: #1d2a00;
+  --vz-good: #0a7d0a;
+  --vz-good-soft: rgb(12 163 12 / 0.1);
+  --vz-warn: #8a5a00;
+  --vz-warn-soft: rgb(250 178 25 / 0.18);
+  --vz-bad: #bf2d2d;
+  --vz-bad-soft: rgb(208 59 59 / 0.1);
+  --vz-shadow-sm: 0 1px 2px rgb(13 16 23 / 0.05);
+  --vz-shadow: 0 1px 2px rgb(13 16 23 / 0.04), 0 2px 8px -2px rgb(13 16 23 / 0.06);
+  --vz-shadow-lg: 0 24px 48px -12px rgb(13 16 23 / 0.22), 0 4px 12px rgb(13 16 23 / 0.06);
+  --vz-dots: rgb(13 16 23 / 0.07);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --vz-canvas: #0a0b0f;
+  --vz-surface: #14161c;
+  --vz-surface-2: #191c23;
+  --vz-surface-3: #20242d;
+  --vz-line: #252933;
+  --vz-line-strong: #343947;
+  --vz-ink: #f0f1f4;
+  --vz-ink-2: #b1b6c3;
+  --vz-ink-3: #7a8191;
+  --vz-brand: #5b76ff;
+  --vz-brand-strong: #7a90ff;
+  --vz-brand-soft: rgb(91 118 255 / 0.14);
+  --vz-brand-ink: #a9b6ff;
+  --vz-volt: #c6f24e;
+  --vz-volt-ink: #1d2a00;
+  --vz-good: #4cd44c;
+  --vz-good-soft: rgb(12 163 12 / 0.16);
+  --vz-warn: #fab219;
+  --vz-warn-soft: rgb(250 178 25 / 0.13);
+  --vz-bad: #f07272;
+  --vz-bad-soft: rgb(208 59 59 / 0.18);
+  --vz-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --vz-shadow: 0 1px 2px rgb(0 0 0 / 0.35), 0 4px 16px -4px rgb(0 0 0 / 0.4);
+  --vz-shadow-lg: 0 24px 64px -12px rgb(0 0 0 / 0.7), 0 4px 12px rgb(0 0 0 / 0.4);
+  --vz-dots: rgb(255 255 255 / 0.06);
+}
+
+@theme {
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-display: "Instrument Serif", ui-serif, Georgia, serif;
+
+  --animate-fade-in: fade-in 0.25s ease-out both;
+  --animate-rise: rise 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-slide-in-right: slide-in-right 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-pop: pop 0.18s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes slide-in-right {
+    from { transform: translateX(24px); opacity: 0; }
+    to { transform: none; opacity: 1; }
+  }
+  @keyframes pop {
+    from { opacity: 0; transform: scale(0.97) translateY(-4px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes shimmer {
+    from { background-position: -400px 0; }
+    to { background-position: 400px 0; }
+  }
+}
+
+@theme inline {
+  --color-canvas: var(--vz-canvas);
+  --color-surface: var(--vz-surface);
+  --color-surface-2: var(--vz-surface-2);
+  --color-surface-3: var(--vz-surface-3);
+  --color-line: var(--vz-line);
+  --color-line-strong: var(--vz-line-strong);
+  --color-ink: var(--vz-ink);
+  --color-ink-2: var(--vz-ink-2);
+  --color-ink-3: var(--vz-ink-3);
+  --color-brand: var(--vz-brand);
+  --color-brand-strong: var(--vz-brand-strong);
+  --color-brand-soft: var(--vz-brand-soft);
+  --color-brand-ink: var(--vz-brand-ink);
+  --color-volt: var(--vz-volt);
+  --color-volt-ink: var(--vz-volt-ink);
+  --color-good: var(--vz-good);
+  --color-good-soft: var(--vz-good-soft);
+  --color-warn: var(--vz-warn);
+  --color-warn-soft: var(--vz-warn-soft);
+  --color-bad: var(--vz-bad);
+  --color-bad-soft: var(--vz-bad-soft);
+  --shadow-card: var(--vz-shadow);
+  --shadow-card-sm: var(--vz-shadow-sm);
+  --shadow-float: var(--vz-shadow-lg);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-canvas text-ink font-sans antialiased;
+    font-feature-settings: "ss01", "cv11";
+  }
+  ::selection {
+    background: var(--vz-brand-soft);
+    color: var(--vz-ink);
+  }
+  :focus-visible {
+    outline: 2px solid var(--vz-brand);
+    outline-offset: 2px;
+  }
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: none;
+  }
+  /* Thin, theme-aware scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--vz-line-strong) transparent;
+  }
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+}
+
+@layer components {
+  .vz-dot-grid {
+    background-image: radial-gradient(var(--vz-dots) 1px, transparent 1px);
+    background-size: 18px 18px;
+  }
+  .vz-skeleton {
+    background: linear-gradient(90deg, var(--vz-surface-3) 0%, var(--vz-surface-2) 40%, var(--vz-surface-3) 80%);
+    background-size: 800px 100%;
+    @apply animate-shimmer rounded-md;
+  }
+  .vz-eyebrow {
+    @apply font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3;
+  }
+  .vz-num {
+    font-variant-numeric: tabular-nums;
+  }
+  /* AI accent: a volt hairline glow reserved for machine-generated content */
+  .vz-ai-ring {
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--vz-volt) 55%, transparent), 0 8px 32px -12px color-mix(in oklab, var(--vz-volt) 45%, transparent);
+  }
+  .vz-prose p { @apply mb-3 last:mb-0 leading-relaxed; }
+  .vz-prose ul { @apply mb-3 space-y-2 pl-0; }
+  .vz-prose ol { @apply mb-3 list-decimal space-y-2 pl-5; }
+  .vz-prose strong { @apply font-semibold text-ink; }
+  .vz-prose h1, .vz-prose h2, .vz-prose h3 { @apply mb-2 mt-4 font-semibold text-ink first:mt-0; }
+  .vz-prose code { @apply rounded bg-surface-3 px-1 py-0.5 font-mono text-[0.85em]; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Print / "Save as PDF" for reports and dashboards */
+@media print {
+  @page { margin: 14mm; }
+  html, body { background: #fff !important; }
+  .no-print { display: none !important; }
+  .print-break-avoid { break-inside: avoid; }
+  .print-full { width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 !important; }
+}

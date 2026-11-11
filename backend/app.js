@@ -11,6 +11,8 @@ const analyticsRoutes = require("./routes/analyticsRoutes");
 const eventRoutes = require("./routes/eventRoutes");
 const activityRoutes = require("./routes/activityRoutes");
 const internalRoutes = require("./routes/internalRoutes");
+const dashboardRoutes = require("./routes/dashboardRoutes");
+const publicRoutes = require("./routes/publicRoutes");
 const eventBus = require("./lib/eventBus");
 const { redisStatus } = require("./lib/redis");
 const { cacheStats } = require("./lib/cache");
@@ -47,6 +49,8 @@ function createApp() {
   app.use("/api/events", eventRoutes);
   app.use("/api/activity", activityRoutes);
   app.use("/api/internal", internalRoutes);
+  app.use("/api/dashboards", dashboardRoutes);
+  app.use("/api/public", publicRoutes);
 
   // Liveness probe used by UptimeRobot to keep the free-tier instance awake — response kept unchanged.
   app.get("/health", (req, res) => {

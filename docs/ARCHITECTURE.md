@@ -92,6 +92,13 @@ All backend roles ship as **one Docker image**: the API (`node index.js`) and ea
 | `GET /api/datasets/:id/insights` | Lightweight insight-status probe polled by the UI while generation runs in the background. |
 | `POST /api/datasets/:id/insights/regenerate` | User-triggered retry. Returns `202`. |
 | `GET /api/activity/summary?days=7` | The user's rolled-up interaction metrics (from the Kafka aggregator). |
+| `GET /api/activity/events?limit=&before=&type=` | The user's recent raw interaction events (Activity timeline), newest first. |
+| `PATCH /api/datasets/:id` · `DELETE /api/datasets/:id` | Rename / permanently delete a dataset (per-user cache invalidated). |
+| `POST /api/datasets/:id/ask` | "Ask your data": the LLM sees only column metadata, a profile and KPIs and returns an answer + chart spec, validated against real column names. The SPA computes the chart from the rows. `503` when the AI is unavailable. Rate limited (`RATE_LIMIT_AI_PER_MIN`). |
+| `GET/POST /api/dashboards` · `GET/PUT/DELETE /api/dashboards/:id` | Custom dashboards: ordered widgets (chart / KPI / table / AI summary / note) on a 12-column grid, plus saved filters. Specs are size-bounded by zod. |
+| `POST /api/dashboards/:id/duplicate` · `POST`/`DELETE /api/dashboards/:id/share` | Duplicate; enable/revoke a public read-only link (random token; revoking invalidates it immediately). |
+| `GET /api/public/dashboards/:token` | Unauthenticated shared view: the dashboard plus only the owner's datasets its widgets reference. Cached briefly (`CACHE_TTL_SHARED_DASHBOARD`), rate limited per IP. |
+| `GET /api/auth/me` · `PATCH /api/auth/me` · `POST /api/auth/password` | Profile and password management (a wrong current password is `400`, never `401`). |
 | `GET /health` | Unchanged liveness text used by UptimeRobot. |
 | `GET /health/ready` | Readiness JSON: MongoDB (required), Redis, Kafka (`healthy`, outbox size), cache hit ratio. `503` only if MongoDB is down. |
 | `/api/internal/*` | n8n-only API (see §3.6), protected by `X-Internal-Api-Key`. |

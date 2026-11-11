@@ -27,6 +27,8 @@ const ActivityEventSchema = new mongoose.Schema(
 );
 
 ActivityEventSchema.index({ bucket: 1, type: 1 });
+// Serves the per-user activity timeline (newest first).
+ActivityEventSchema.index({ user: 1, occurredAt: -1 });
 ActivityEventSchema.index({ createdAt: 1 }, { expireAfterSeconds: config.events.rawRetentionDays * 24 * 3600 });
 
 module.exports = mongoose.model("ActivityEvent", ActivityEventSchema);

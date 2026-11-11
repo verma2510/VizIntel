@@ -121,6 +121,7 @@ const config = {
       analytics: int("CACHE_TTL_ANALYTICS", 300),
       activity: int("CACHE_TTL_ACTIVITY", 30),
       columnClassification: int("CACHE_TTL_COLUMN_CLASSIFICATION", 7 * 24 * 3600),
+      sharedDashboard: int("CACHE_TTL_SHARED_DASHBOARD", 60),
     },
   },
 
@@ -129,6 +130,8 @@ const config = {
     eventsPerMinute: int("RATE_LIMIT_EVENTS_PER_MIN", 240),
     authPerMinute: int("RATE_LIMIT_AUTH_PER_MIN", 30),
     uploadsPerMinute: int("RATE_LIMIT_UPLOADS_PER_MIN", 10),
+    aiPerMinute: int("RATE_LIMIT_AI_PER_MIN", 20),
+    publicPerMinute: int("RATE_LIMIT_PUBLIC_PER_MIN", 60),
   },
 
   n8n: {

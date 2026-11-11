@@ -17,3 +17,15 @@ exports.getSummary = async (req, res) => {
   );
   cache.sendCached(res, result);
 };
+
+const eventsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  before: z.coerce.date().optional(),
+  type: z.enum(["page_view", "click", "search", "dataset_uploaded"]).optional(),
+});
+
+/** GET /api/activity/events?limit=50&before=<iso>&type=click — the user's recent interaction timeline. */
+exports.getEvents = async (req, res) => {
+  const query = eventsQuerySchema.parse(req.query);
+  res.json(await activityService.listRecentEvents(req.user.id, query));
+};

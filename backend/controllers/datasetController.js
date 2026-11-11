@@ -1,5 +1,6 @@
 const { z } = require("zod");
 const datasetService = require("../services/datasetService");
+const aiChartService = require("../services/aiChartService");
 const { sendCached } = require("../lib/cache");
 
 // Thin HTTP layer: validation + response shaping. Business logic lives in services/datasetService.js.
@@ -53,4 +54,22 @@ exports.regenerateInsights = async (req, res) => {
     reason: "user",
   });
   res.status(202).json(result);
+};
+
+const renameSchema = z.object({ name: z.string().trim().min(1, "Name is required").max(200) });
+const askSchema = z.object({ question: z.string().trim().min(3, "Ask a slightly longer question").max(500) });
+
+exports.renameDataset = async (req, res) => {
+  const { name } = renameSchema.parse(req.body);
+  res.json(await datasetService.renameDataset(req.user.id, req.params.id, name));
+};
+
+exports.deleteDataset = async (req, res) => {
+  await datasetService.deleteDataset(req.user.id, req.params.id);
+  res.status(204).end();
+};
+
+exports.askDataset = async (req, res) => {
+  const { question } = askSchema.parse(req.body);
+  res.json(await aiChartService.askDataset({ userId: req.user.id, datasetId: req.params.id, question }));
 };

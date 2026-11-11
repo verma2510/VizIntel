@@ -258,7 +258,28 @@ async function getUserActivitySummary(userId, days = 7) {
   };
 }
 
+/**
+ * The user's most recent raw interaction events (newest first) for the activity timeline. Raw events are
+ * retained for ACTIVITY_RAW_RETENTION_DAYS; `before` pages further back.
+ */
+async function listRecentEvents(userId, { limit = 50, before, type } = {}) {
+  const userOid = toObjectId(userId);
+  if (!userOid) return { items: [], nextBefore: null };
+  const filter = { user: userOid };
+  if (before) filter.occurredAt = { $lt: before };
+  if (type) filter.type = type;
+  const docs = await ActivityEvent.find(filter, { type: 1, key: 1, path: 1, properties: 1, occurredAt: 1 })
+    .sort({ occurredAt: -1 })
+    .limit(limit)
+    .lean();
+  return {
+    items: docs.map((d) => ({ id: d._id, type: d.type, key: d.key, path: d.path, properties: d.properties || {}, occurredAt: d.occurredAt })),
+    nextBefore: docs.length === limit ? docs[docs.length - 1].occurredAt : null,
+  };
+}
+
 module.exports = {
+  listRecentEvents,
   ingestEvents,
   recomputeBuckets,
   buildMetricDocuments,

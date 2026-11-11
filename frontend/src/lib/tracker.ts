@@ -75,8 +75,17 @@ const sanitize = (properties: TrackProperties): TrackProperties =>
       .map(([key, value]) => [key.slice(0, 64), typeof value === "string" ? value.slice(0, 500) : value])
   );
 
+/** Per-browser opt-out, set from Settings → Privacy (lib/prefs.ts). */
+const optedOut = (): boolean => {
+  try {
+    return localStorage.getItem("vz_tracking_optout") === "1";
+  } catch {
+    return false;
+  }
+};
+
 export function track(type: EventType, properties: TrackProperties = {}, path = window.location.pathname): void {
-  if (!ENABLED) return;
+  if (!ENABLED || optedOut()) return;
   queue.push({ eventId: uuid(), type, occurredAt: new Date().toISOString(), sessionId, path, properties: sanitize(properties) });
   if (queue.length > MAX_QUEUE) queue = queue.slice(-MAX_QUEUE); // drop the oldest under sustained failure
   if (queue.length >= MAX_BATCH) void flush();

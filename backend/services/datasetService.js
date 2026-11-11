@@ -266,7 +266,33 @@ async function requestInsightsRegeneration({ datasetId, userId, reason = "manual
   return { datasetId, insightsStatus: "pending", deduplicated: false };
 }
 
+/** Renames a dataset (metadata only). Returns the list-shaped document (no rows). */
+async function renameDataset(userId, datasetId, name) {
+  const oid = toObjectId(datasetId);
+  if (!oid) throw new NotFoundError("Dataset not found");
+  const doc = await Dataset.findOneAndUpdate(
+    { _id: oid, user: toObjectId(userId) },
+    { $set: { name } },
+    { returnDocument: "after", projection: { originalData: 0, ...INTERNAL_FIELDS } }
+  ).lean();
+  if (!doc) throw new NotFoundError("Dataset not found");
+  await cache.invalidateUser(userId);
+  return withDefaults(doc);
+}
+
+/** Permanently deletes a dataset. Dashboards that reference it render the widget as "dataset removed". */
+async function deleteDataset(userId, datasetId) {
+  const oid = toObjectId(datasetId);
+  if (!oid) throw new NotFoundError("Dataset not found");
+  const result = await Dataset.deleteOne({ _id: oid, user: toObjectId(userId) });
+  if (!result.deletedCount) throw new NotFoundError("Dataset not found");
+  await cache.invalidateUser(userId);
+  logger.info({ datasetId }, "Dataset deleted");
+}
+
 module.exports = {
+  renameDataset,
+  deleteDataset,
   createDataset,
   listDatasets,
   listDatasetsCached,

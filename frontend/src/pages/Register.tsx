@@ -1,10 +1,12 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
+import { ArrowRight, Lock, Mail, User as UserIcon } from "lucide-react";
 import { useAuth } from "../context/Auth";
-import { Button } from "../components/Button";
-import { Textfield } from "../components/Textfield";
-import { Card } from "../components/Card";
-import { ActivitySquare, CheckCircle2 } from "lucide-react";
+import { Button } from "../components/ui/Button";
+import { Textfield } from "../components/ui/Field";
+import { api, errorMessage } from "../lib/api";
+import type { User } from "../types";
+import { AuthLayout } from "./auth/AuthLayout";
 
 export const Register: React.FC = () => {
   const [name, setName] = useState("");
@@ -18,95 +20,54 @@ export const Register: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setError("");
-
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.msg || "Registration failed");
-      }
-
-      login(data.user, data.token);
-    } catch (err: any) {
-      setError(err.message || "An unexpected error occurred");
+      const data = await api<{ token: string; user: User }>("/api/auth/register", { method: "POST", body: { name, email, password }, auth: false });
+      login(data.user, data.token, "/app");
+    } catch (err) {
+      setError(errorMessage(err, "Registration failed"));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center relative overflow-hidden">
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-600/20 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/20 rounded-full blur-[120px] pointer-events-none" />
-
-      <Card className="w-full max-w-md backdrop-blur-3xl bg-slate-900/60 border-slate-800/60 shadow-2xl relative z-10 px-8 py-10 mt-[-5%]">
-        <div className="flex flex-col items-center mb-8">
-          <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-3 rounded-2xl shadow-lg mb-4 ring-4 ring-indigo-500/20">
-            <ActivitySquare className="text-white w-8 h-8" strokeWidth={2.5} />
-          </div>
-          <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-200 to-indigo-200">
-            Create Account
-          </h2>
-          <p className="text-slate-400 mt-2 text-center text-sm">
-            Start analyzing your massive datasets with AI instantly.
-          </p>
-        </div>
-
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/50 text-red-500 text-sm p-3 rounded-lg mb-6 flex items-center justify-center">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleRegister} className="flex flex-col gap-5">
-          <Textfield
-            label="Full Name"
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="John Doe"
-            required
-            autoComplete="name"
-          />
-          <Textfield
-            label="Email Address"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@company.com"
-            required
-            autoComplete="email"
-          />
-          <Textfield
-            label="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            required
-            autoComplete="new-password"
-            minLength={6}
-          />
-
-          <Button type="submit" className="w-full mt-2 group" size="lg" isLoading={loading} data-track="register_submit">
-            Sign Up
-            <CheckCircle2 className="ml-2 w-4 h-4" />
-          </Button>
-        </form>
-
-        <div className="mt-8 text-center text-sm text-slate-400">
+    <AuthLayout
+      title="Create your workspace"
+      subtitle="Turn your first spreadsheet into insights in under a minute."
+      footer={
+        <>
           Already have an account?{" "}
-          <Link to="/login" data-track="nav_login" className="text-indigo-400 hover:text-indigo-300 font-medium hover:underline transition-all">
+          <Link to="/login" data-track="nav_login" className="font-medium text-brand-ink hover:underline">
             Sign in
           </Link>
+        </>
+      }
+    >
+      {error && (
+        <div role="alert" className="mb-5 rounded-lg border border-bad/30 bg-bad-soft px-3 py-2.5 text-[13px] text-bad">
+          {error}
         </div>
-      </Card>
-    </div>
+      )}
+      <form onSubmit={handleRegister} className="flex flex-col gap-4">
+        <Textfield label="Full name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ada Lovelace" required autoComplete="name" leading={<UserIcon size={15} />} autoFocus />
+        <Textfield label="Work email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" required autoComplete="email" leading={<Mail size={15} />} />
+        <Textfield
+          label="Password"
+          hint="At least 6 characters"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="••••••••"
+          required
+          minLength={6}
+          autoComplete="new-password"
+          leading={<Lock size={15} />}
+        />
+        <Button type="submit" size="lg" className="group mt-2 w-full" isLoading={loading} data-track="register_submit">
+          Create account
+          {!loading && <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />}
+        </Button>
+      </form>
+    </AuthLayout>
   );
 };
