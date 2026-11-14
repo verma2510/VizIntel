@@ -159,6 +159,14 @@ cd ../frontend && npm run build                            # type-check + produc
   liveness probes. Run at least one instance per group.
 - **Kafka**: any Kafka-compatible service — set `KAFKA_BROKERS`, `KAFKA_SSL=true`, `KAFKA_SASL_MECHANISM`,
   `KAFKA_SASL_USERNAME`, `KAFKA_SASL_PASSWORD`, and `KAFKA_REPLICATION_FACTOR=3`. Run `npm run kafka:setup` once.
+  - **Aiven** signs broker certificates with a private per-project CA, so `KAFKA_SSL=true` alone fails with
+    `self signed certificate in certificate chain`. Provide the CA instead: `KAFKA_SSL_CA` (paste the `ca.pem` text)
+    or `KAFKA_SSL_CA_FILE` (path, e.g. a Render Secret File at `/etc/secrets/ca.pem`). Either implies TLS.
+  - **Aiven free tier** allows 5 topics x 2 partitions: set `KAFKA_SINGLE_ACTIVITY_TOPIC=true`,
+    `KAFKA_ACTIVITY_PARTITIONS=2`, `KAFKA_REPLICATION_FACTOR=1`. Topics are not auto-created by the API, so run
+    `npm run kafka:setup` once (workers also provision them on boot).
+  - The API does **not** consume events. With Kafka on, deploy the worker (`npm run workers`) too, and only then set
+    `INSIGHTS_MODE=async`.
 - **Redis**: `REDIS_URL` (`rediss://` for TLS).
 - **n8n**: set `WEBHOOK_URL` to its public URL, use strong `N8N_ENCRYPTION_KEY` / `INTERNAL_API_KEY` /
   `N8N_WEBHOOK_SECRET`, and move the internal key into an n8n Header Auth credential if preferred.

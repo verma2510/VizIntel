@@ -6,7 +6,7 @@
  *    message independently (pub/sub fan-out); instances WITHIN a group split partitions (horizontal scale).
  *  - Inline mode: lib/eventBus registers each handler in-process, mirroring the fan-out semantics.
  */
-const { TOPICS, CONSUMER_GROUPS } = require("./topics");
+const { TOPICS, CONSUMER_GROUPS, unique } = require("./topics");
 const { handleActivityEvents } = require("./handlers/activityHandler");
 const { handleNotificationEvents } = require("./handlers/notificationHandler");
 const { handleInsightsRequests } = require("./handlers/insightsHandler");
@@ -15,7 +15,9 @@ const SUBSCRIPTIONS = [
   {
     name: "activity",
     groupId: CONSUMER_GROUPS.ACTIVITY,
-    topics: [TOPICS.PAGE_VIEWS, TOPICS.CLICKS, TOPICS.SEARCHES, TOPICS.DATASET_UPLOADED],
+    // unique(): with KAFKA_SINGLE_ACTIVITY_TOPIC the first three are the same topic; subscribing/registering it
+    // three times would run this handler three times per event in inline mode.
+    topics: unique([TOPICS.PAGE_VIEWS, TOPICS.CLICKS, TOPICS.SEARCHES, TOPICS.DATASET_UPLOADED]),
     handler: handleActivityEvents,
     batchSize: 500, // large batches amortise MongoDB round trips — this is where Kafka "buffers" DB load
     partitionsConsumedConcurrently: 3,

@@ -8,6 +8,7 @@
  *   - no N8N_WEBHOOK_*  -> outbound workflow notifications are skipped
  */
 require("dotenv").config({ quiet: true });
+const fs = require("fs");
 
 const raw = (name) => {
   const value = process.env[name];
@@ -28,6 +29,32 @@ const list = (name) =>
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+
+/**
+ * TLS settings for the Kafka client.
+ *  - KAFKA_SSL=true                 -> TLS using Node's built-in trust store (Confluent Cloud, MSK, Upstash...).
+ *  - KAFKA_SSL_CA / KAFKA_SSL_CA_FILE -> TLS trusting a PRIVATE CA (Aiven's per-project "ca.pem"). Setting either
+ *    implies TLS. KAFKA_SSL_CA takes the PEM text itself (real newlines or literal "\n" both work, which suits
+ *    single-line env var UIs); KAFKA_SSL_CA_FILE takes a path (e.g. a Render Secret File: /etc/secrets/ca.pem).
+ */
+function kafkaTls() {
+  const inline = raw("KAFKA_SSL_CA");
+  const file = raw("KAFKA_SSL_CA_FILE");
+  if (!inline && !file) return bool("KAFKA_SSL", false);
+
+  const ca = [];
+  if (inline) ca.push(inline.replace(/\\n/g, "\n").trim());
+  if (file) {
+    try {
+      ca.push(fs.readFileSync(file, "utf8").trim());
+    } catch (err) {
+      // Logger depends on config, so use stderr directly here.
+      console.error(`[config] Cannot read KAFKA_SSL_CA_FILE (${file}): ${err.message}`);
+      process.exit(1);
+    }
+  }
+  return { ca, rejectUnauthorized: true };
+}
 
 const nodeEnv = str("NODE_ENV", "development");
 const kafkaBrokers = list("KAFKA_BROKERS");
@@ -81,7 +108,10 @@ const config = {
     brokers: kafkaBrokers.length ? kafkaBrokers : ["localhost:9092"],
     clientId: str("KAFKA_CLIENT_ID", "vizintel"),
     topicPrefix: str("KAFKA_TOPIC_PREFIX", "vizintel"),
-    ssl: bool("KAFKA_SSL", false),
+    ssl: kafkaTls(),
+    // Brokers with a hard topic cap (e.g. Aiven free tier: 5 topics) can share ONE topic for page views, clicks
+    // and searches. Events carry their own `type`, so the aggregator doesn't care which topic they arrive on.
+    singleActivityTopic: bool("KAFKA_SINGLE_ACTIVITY_TOPIC", false),
     sasl: raw("KAFKA_SASL_MECHANISM")
       ? {
           mechanism: str("KAFKA_SASL_MECHANISM"),
